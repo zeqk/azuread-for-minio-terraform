@@ -1,0 +1,47 @@
+version: "3.9"
+services:
+  minio:
+    image: quay.io/minio/minio:RELEASE.2023-03-24T21-41-23Z
+    container_name: minio
+    restart: always
+    command: server /data --console-address ":9090"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_IDENTITY_OPENID_CONFIG_URL="https://login.microsoftonline.com/${MINIO_AAD_TENANT_ID}/v2.0/.well-known/openid-configuration"
+      - MINIO_IDENTITY_OPENID_CLIENT_ID=${MINIO_AAD_CLIENT_ID}
+      - MINIO_IDENTITY_OPENID_CLIENT_SECRET=${MINIO_AAD_SECRET_ID}
+      - MINIO_IDENTITY_OPENID_SCOPES="profile openid email"
+      - MINIO_IDENTITY_OPENID_CLAIM_NAME="groups"
+      - MINIO_IDENTITY_OPENID_REDIRECT_URI="https://minio-console.mydomain.com/oauth_callback"
+      - MINIO_IDENTITY_OPENID_DISPLAY_NAME="AzureAD"
+      - MINIO_IDENTITY_OPENID_COMMENT="AzureAD" 
+    volumes:
+      - minio:/data
+    labels:
+      # Traefik enabled
+      traefik.enable: "true"
+
+      # Https redirection
+      traefik.http.routers.minio-console-http.entrypoints: web
+      traefik.http.routers.minio-console-http.rule: Host(`minio-console.mydomain.com`)
+      traefik.http.routers.minio-console-http.middlewares: "minio-console-https"
+      traefik.http.middlewares.minio-console-https.redirectscheme.scheme: https
+
+      # Console
+      traefik.http.routers.minio-console.rule: Host(`minio-console.mydomain.com`)
+      traefik.http.routers.minio-console.entrypoints: websecure
+      traefik.http.routers.minio-console.tls.certresolver: "lets-encrypt"
+      traefik.http.routers.minio-console.service: "minio-console"
+      traefik.http.services.minio-console.loadbalancer.server.port: "9090"
+
+      # API
+      traefik.http.routers.minio.rule: Host(`minio.mydomain.com`)
+      traefik.http.routers.minio.entrypoints: websecure
+      traefik.http.routers.minio.tls.certresolver: "lets-encrypt"
+      traefik.http.routers.minio.service: "minio"
+      traefik.http.services.minio.loadbalancer.server.port: "9000"
+
+
+volumes:
+  minio:
